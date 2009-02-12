@@ -11,6 +11,5 @@ setup(name='Ska.TelemArchive',
       zip_safe=False,
       namespace_packages=['Ska'],
       packages=['Ska', 'Ska.TelemArchive'],
-      # package_dir={'Ska' : 'Ska'},
-      # package_data={}
+      package_dir={'Ska' : 'Ska'},
       )

@@ -160,15 +160,18 @@ def server():
     # global opt
     # opt, args = get_options()
 
+    logging.basicConfig(filename=opt.logfile, level=logging.INFO,
+                        format='%(asctime)s %(levelname)s: %(message)s')
+
     # establish server
     try:
         service = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        service.bind(("localhost", PORT))
+        service.bind(("", PORT))
         service.listen(1)
-    except:
-        raise
+    except socket.error:
+        logging.info("Socket already in use (probably normal)")
+        sys.exit(0)
 
-    logging.basicConfig(filename=opt.logfile, level=logging.INFO)
     logging.info("Listening on port %d" % PORT)
 
     while True:
