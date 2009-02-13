@@ -4,6 +4,7 @@ import re
 import cPickle
 import socket
 import signal
+import stat
 import time
 import pprint
 import shutil
@@ -47,12 +48,63 @@ class FetchJobs(object):
     def __init__(self):
         self.jobs = []
 
-        # Read in existing jobs
-        for pid in os.listdir(opt.outroot):
-            job = cPickle.load(open(os.path.join(opt.outroot, pid, opt.jobfile)))
+        # Find existing jobs and clean expired directories
+        jobids = self.clean_jobs()
+
+        # Read existing job information from jobfile.  
+        for jobid in jobids:
+            outdir = os.path.join(opt.outroot, jobid)
+            try:
+                job = cPickle.load(open(os.path.join(opt.outroot, jobid, opt.jobfile)))
+            except IOError:
+                logging.info('Jobfile for %s failed to load during init %.1f' % outdir)
+                continue
             self.add(job)
 
-        self.update_status()
+    def clean_jobs(self):
+        """
+        Clean job directories and job structures that have expired or are incomplete.
+        :rtype: Cleaned list of jobids
+        """
+        jobids = []
+        for jobid in self.get_jobids():
+            outdir = os.path.join(opt.outroot, jobid)
+            if time.time() - os.stat(outdir)[stat.ST_MTIME] > opt.max_age * 86400:
+                logging.info('Removing directory %s because age exceeds %.1f' % (outdir, opt.max_age))
+                shutil.rmtree(outdir)
+            elif not os.path.exists(os.path.join(outdir, opt.jobfile)):
+                logging.info('Removing directory %s because jobfile not foudn' % outdir)
+                shutil.rmtree(outdir)
+            else:
+                jobids.append(jobid)
+
+        return jobids
+                
+    def get_jobids(self):
+        return [x for x in os.listdir(opt.outroot) if re.match('\d+$', x)]
+
+    def create_job(self):
+        """Create a new job"""
+        jobids = self.get_jobids()
+        jobid = max([1] + [int(x) for x in jobids]) + 1
+        jobid = str(jobid)
+        outdir = os.path.join(opt.outroot, jobid)
+
+        job = dict(jobid=jobid,
+                   systime_start=time.time(),
+                   outdir=outdir,
+                   status='created',
+                   url=os.path.join(opt.urlroot, jobid, opt.outfile),
+                   jobfile=os.path.join(opt.outroot, jobid, opt.jobfile),
+                   statusfile=os.path.join(outdir, opt.statusfile),
+                   outfile=os.path.join(outdir, opt.outfile),
+                   )
+        self.add(job)
+
+        os.makedirs(outdir)
+        cPickle.dump(job, open(job['jobfile'], 'w'))
+
+        return job
 
     def add(self, job):
         self.jobs.insert(0, job)
@@ -62,33 +114,24 @@ class FetchJobs(object):
 
     n_active = property(_n_active)
 
-    def update_status(self):
-        jobs = []
+    def update_jobs(self):
+        """Read statusfiles and update corresponding job structure and file"""
         for job in self.jobs:
-            # Delete jobs and their output directories as needed
-            if  (time.time() - job['systime_start'] > opt.max_age * 86400):
-                if os.path.exists(job['outdir']):
-                    logging.info('Removing directory %s because age exceeds %.1f' % (job['outdir'], opt.max_age))
-                    shutil.rmtree(job['outdir'])
-            else:
-                if os.path.exists(job['statusfile']):
-                    job.update(cPickle.load(open(job['statusfile'])))
-                jobs.append(job)
+            if os.path.exists(job['statusfile']):
+                job.update(cPickle.load(open(job['statusfile'])))
                 cPickle.dump(job, open(job['jobfile'], 'w'))
-        self.jobs = jobs
+            else:
+                logging.warning('No status file for %s' % job['jobid'])
             
 jobs = FetchJobs()
 
-def run_fetch(kwargs):
+def run_fetch(job, kwargs):
     # Only pay attention to these keys in kwargs.  Others are ignored.
     allowed_keys = ('start', 'stop', 'dt', 'out_format',
                     'time_format', 'colspecs')
-
-    pid = os.fork()
-
-    outdir = os.path.join(opt.outroot, str(pid or os.getpid()))
-    fetch_kwargs = dict(outfile=os.path.join(outdir, opt.outfile),
-                        statusfile=os.path.join(outdir, opt.statusfile),
+    
+    fetch_kwargs = dict(outfile=job['outfile'],
+                        statusfile=job['statusfile'],
                         status_interval=opt.status_interval,
                         max_size=opt.max_size,
                         ignore_quality=False,
@@ -103,31 +146,26 @@ def run_fetch(kwargs):
     # Update allowed key values in fetch_kwargs
     fetch_kwargs.update((x, kwargs[x]) for x in kwargs if x in allowed_keys )
 
+    # Incorporate fetch keyword args into job and store
+    job.update(fetch_kwargs)
+        
+    pid = os.fork()
     if pid:
-        job = dict(pid=pid,
-                   systime_start=time.time(),
-                   outdir=outdir,
-                   status='active',
-                   url=os.path.join(opt.urlroot, str(pid), opt.outfile),
-                   jobfile=os.path.join(opt.outroot, str(pid), opt.jobfile),
-                   )
-        job.update(fetch_kwargs)
-        return job
+        job['pid'] = pid
+        return
 
-    logging.info('Running fetch() with kwargs:\n%s' % pprint.pformat(fetch_kwargs))
+    logging.info('Running fetch() in pid %d with kwargs:\n%s' % (os.getpid(), pprint.pformat(fetch_kwargs)))
 
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
     try:
         headers, data = Ska.TelemArchive.fetch.fetch(**fetch_kwargs)
     except Exception, msg:
+        # Something bombed so write jobfile and statusfile here
         logging.warning('Fetch failed with msg: %s' % msg)
-        # Something bombed so write statusfile manually
-        if not os.path.exists(outdir):
-            os.makedirs(outdir)
-        fetch_kwargs['status'] = 'error'
-        fetch_kwargs['error'] = msg
-        cPickle.dump(fetch_kwargs, open(fetch_kwargs['statusfile'], 'w'))
+        job['status'] = 'error'
+        job['error'] = str(msg)
+        logging.warning('job = %s' % pprint.pformat(job))
+        cPickle.dump(job, open(job['jobfile'], 'w'))
+        cPickle.dump(job, open(job['statusfile'], 'w'))
 
     sys.exit(0)
 
@@ -135,22 +173,29 @@ def server_action(action):
     cmd = action.get('cmd')
     kwargs = action.get('kwargs')
 
-    jobs.update_status()
+    jobs.update_jobs()
 
     logging.info("Server action cmd: %s" % cmd)
     if cmd == 'get_status':
         return jobs.jobs
+
     elif cmd == 'run_fetch':
         if jobs.n_active >= opt.max_jobs:
             logging.warning('Maximum active jobs (%d) exceeded' % opt.max_jobs)
             return dict(error='Maximum active jobs (%d) exceeded' % opt.max_jobs)
-        job = run_fetch(kwargs)
-        jobs.add(job)
-        time.sleep(1)
+
+        job = jobs.create_job()
+        run_fetch(job, kwargs)
+        cPickle.dump(job, open(job['jobfile'], 'w'))    
+
         return jobs.jobs
+
     elif cmd == 'stop_server':
+        logging.info('Stopping fetch server')
         return 'Stopping fetch server'
+
     else:
+        logging.warning("Unknown cmd '%s'" % str(cmd))
         return "Unknown cmd '%s'" % str(cmd)
 
 def sigint_handler(signal, frame):

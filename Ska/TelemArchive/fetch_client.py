@@ -38,8 +38,8 @@ def send(action, host=HOST, port=PORT):
         response = pickle.loads(msg[:-len(TERMINATOR)])
 
         alarm(0)
-    except TimeoutError, e:
-        response = [dict(client_error='TimeoutError')]
+    except Exception, e:
+        response = [dict(client_error=e)]
 
     server.close()
     return response
