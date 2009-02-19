@@ -154,6 +154,7 @@ class FetchStatus(object):
         self.datestop = Chandra.Time.DateTime(datestop).date
         self.columns = ' '.join([x.name for x in columns])
         self.error = None
+        self.filesize = 0
         self.print_attrs = ('current_row', 'total_rows', 'percent_complete',
                             'process_start', 'current_time',
                             'datestart', 'datestop', 
@@ -180,10 +181,12 @@ class FetchStatus(object):
         cPickle.dump(vals, open(self.statusfile, 'w'))
 
     def check_filesize(self):
-        if self.max_size and self.outfile and os.stat(self.outfile).st_size > self.max_size:
-            self.error = 'file size limit %d bytes exceeded' % self.max_size
-            self.write_statusfile('error')
-            sys.exit(1)
+        if self.max_size and self.outfile:
+            self.filesize = os.stat(self.outfile).st_size
+            if self.filesize > self.max_size:
+                self.error = 'file size limit %d bytes exceeded' % self.max_size
+                self.write_statusfile('error')
+                sys.exit(1)
 
 class InvalidTableOrColumn(LookupError):
     """Custom exception if no matching table or column is found"""

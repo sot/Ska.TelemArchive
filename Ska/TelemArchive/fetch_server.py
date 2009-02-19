@@ -2,6 +2,7 @@ import sys
 import os
 import re
 import cPickle
+import optparse
 import socket
 import signal
 import stat
@@ -14,9 +15,6 @@ import Ska.TelemArchive.fetch
 SKA = os.getenv('SKA') or '/proj/sot/ska'
 SKA_DATA = os.path.join(SKA, 'data', 'telem_archive')
 
-# user-accessible port
-PORT = 18039
-
 # Unlikely sequence of characters to terminate conversation
 TERMINATOR = "\_$|)<~};!)}]+/)()]\;}&|&*\\%_$^^;;-+=:_;\\<|\'-_/]*?`-"
 
@@ -25,24 +23,6 @@ class TimeoutError(Exception):
 
 def timeout_handler(signum, frame):
     raise TimeoutError
-
-# Fake optparse object.  Fix this sometime...
-class Options(object):
-    def __init__(self, **kwargs):
-        for key in kwargs:
-            setattr(self, key, kwargs[key])
-
-opt = Options(max_age=3,
-              logfile=os.path.join(SKA_DATA, 'server.log'),
-              outroot='/proj/sot/ska/www/media/fetch',
-              urlroot='/media/fetch',
-              outfile='telem.dat',
-              statusfile='status.dat',
-              jobfile='job.dat',
-              status_interval=4,
-              max_size=10 * 1e6,
-              max_jobs=2,
-              )
 
 class FetchJobs(object):
     def __init__(self):
@@ -81,7 +61,8 @@ class FetchJobs(object):
         return jobids
                 
     def get_jobids(self):
-        return [x for x in os.listdir(opt.outroot) if re.match('\d+$', x)]
+        jobids = (int(x) for x in os.listdir(opt.outroot) if re.match('\d+$', x))
+        return [str(x) for x in sorted(jobids)]
 
     def create_job(self):
         """Create a new job"""
@@ -116,15 +97,16 @@ class FetchJobs(object):
 
     def update_jobs(self):
         """Read statusfiles and update corresponding job structure and file"""
+        jobs = []
         for job in self.jobs:
             if os.path.exists(job['statusfile']):
                 job.update(cPickle.load(open(job['statusfile'])))
                 cPickle.dump(job, open(job['jobfile'], 'w'))
+                jobs.append(job)
             else:
-                logging.warning('No status file for %s' % job['jobid'])
+                logging.warning('No status file for %s, removing job' % job['jobid'])
+        self.jobs = jobs
             
-jobs = FetchJobs()
-
 def run_fetch(job, kwargs):
     # Only pay attention to these keys in kwargs.  Others are ignored.
     allowed_keys = ('start', 'stop', 'dt', 'out_format',
@@ -169,7 +151,7 @@ def run_fetch(job, kwargs):
 
     sys.exit(0)
 
-def server_action(action):
+def server_action(action, jobs):
     cmd = action.get('cmd')
     kwargs = action.get('kwargs')
 
@@ -202,8 +184,7 @@ def sigint_handler(signal, frame):
     raise Exception
 
 def server():
-    # global opt
-    # opt, args = get_options()
+    jobs = FetchJobs()
 
     logging.basicConfig(filename=opt.logfile, level=logging.INFO,
                         format='%(asctime)s %(levelname)s: %(message)s')
@@ -211,13 +192,13 @@ def server():
     # establish server
     try:
         service = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        service.bind(("", PORT))
+        service.bind(("", opt.port))
         service.listen(1)
     except socket.error:
         logging.info("Socket already in use (probably normal)")
         sys.exit(0)
 
-    logging.info("Listening on port %d" % PORT)
+    logging.info("Listening on port %d" % opt.port)
 
     while True:
         # serve forever
@@ -235,7 +216,8 @@ def server():
             msg_recv = cPickle.loads(msg_recv[:-len(TERMINATOR)])
 
             # Respond to the request from the received message
-            msg_send = cPickle.dumps(server_action(msg_recv)) + TERMINATOR
+            server_response = server_action(msg_recv, jobs)
+            msg_send = cPickle.dumps(server_response) + TERMINATOR
 
             # Send the response
             while msg_send:
@@ -254,5 +236,52 @@ def server():
 
     service.close()
 
+def get_options():
+    parser = optparse.OptionParser()
+    parser.set_defaults()
+    parser.add_option("--logfile",
+                      default=os.path.join(SKA_DATA, 'server.log'),
+                      help="Logfile")
+    parser.add_option("--outroot",
+                      default='/proj/sot/ska/www/media/fetch',
+                      help="Root directory for fetch output")
+    parser.add_option("--urlroot",
+                      default='/media/fetch',
+                      help="URL root")
+    parser.add_option("--outfile",
+                      default='telem.dat',
+                      help="Output (data) file name")
+    parser.add_option("--statusfile",
+                      default='status.dat',
+                      help="Status file name")
+    parser.add_option("--jobfile",
+                      default='job.dat',
+                      help="Job file name")
+    parser.add_option("--status-interval",
+                      default=4,
+                      type=int,
+                      help="Interval between status file updates (sec)")
+    parser.add_option("--max-size",
+                      default=10000000,
+                      type=int,
+                      help="Maximum output file size (bytes)")
+    parser.add_option("--max-jobs",
+                      default=2,
+                      type=int,
+                      help="Maximum active fetch jobs",)
+    parser.add_option("--max-age",
+                      default=3,
+                      type=float,
+                      help="Maximum age for fetch output files before deletion (days)",)
+    parser.add_option("--port",
+                      default=18039,
+                      type=int,
+                      help="Socket port")
+
+    (opt, args) = parser.parse_args()
+    return (opt, args)
+
 if __name__ == '__main__':
+    global opt
+    opt, args = get_options()
     server()
