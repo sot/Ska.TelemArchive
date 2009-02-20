@@ -12,6 +12,8 @@ import Chandra.Time
 from mx.DateTime import strptime, DateTime, Error, DateTimeDeltaFromSeconds
 from Ska.TelemArchive.data_table import DataColumn, DateNotInTable
 import cPickle
+from pyparsing import (Word, alphanums, delimitedList, ParseException,
+                       Optional, lineStart, lineEnd)
 
 SKA = os.getenv('SKA') or '/proj/sot/ska'
 SKA_DATA = SKA + '/data/telem_archive'
@@ -261,10 +263,16 @@ def get_column_defs(table_defs, args):
         if table_name:
             if table_name not in table_defs:
                 raise InvalidTableOrColumn, "No table named %s" % table_name
-            table_col_names = [ x['name'] for x in table_defs[table_name]['columns'] ]
+
+            table_columns = table_defs[table_name]['columns']
+            skip_cols = ['time', 'quality']
+            skip_cols += [x['name'] for x in table_columns if not x.get('is_output', True)]
+            table_col_names = [x['name'] for x in table_columns if x['name'] not in skip_cols]
+            print skip_cols
+            print table_col_names
+
             if not col_names:
-                skip_cols = ['time', 'quality']
-                col_names = [x for x in table_col_names if x not in skip_cols]
+                col_names = table_col_names
 
             for col_name in col_names:
                 if col_name not in table_col_names:
@@ -273,18 +281,21 @@ def get_column_defs(table_defs, args):
                 columns.append({'table': table_name,
                                 'name' : col_name})
         else:
-            for table_defs_name in table_defs:
-                try:
-                    columns += get_columns_in_table(table_defs_name, col_names)
-                except InvalidTableOrColumn:
-                    pass
+            for col_name in col_names:
+                for table_name in table_defs:
+                    try:
+                        column = get_columns_in_table(table_name, [col_name])
+                        break
+                    except InvalidTableOrColumn:
+                        pass
+                else:
+                    raise InvalidTableOrColumn('Column %s not found in any table' % col_name)
+
+                columns += column
 
         return columns
     
     columns = []
-    from pyparsing import Word, alphanums, \
-         delimitedList, ParseException, Optional, \
-         lineStart, lineEnd
     table_name = Word(alphanums + '_-').setResultsName("table_name") + ':'
     col_name = Word(alphanums + '_-')
     opt_table_and_cols = Optional(table_name) + \
@@ -294,7 +305,7 @@ def get_column_defs(table_defs, args):
         try:
             results = arg_parse.parseString(arg)
         except ParseException, msg:
-            raise ParseException("Bad syntax in %s" % arg)
+            raise ParseException("Bad column specifier syntax in %s" % arg)
             
         columns += get_columns_in_table(results.table_name, results.col_names)
 
@@ -310,7 +321,7 @@ def get_table_defs(table_dir):
     table_def = {}
     for filename in table_files:
         table_name = re.sub(r'\.yml$', '', os.path.basename(filename))
-        table_def[table_name] = yaml.load( open(filename).read() )
+        table_def[table_name] = yaml.load(open(filename).read())
     return table_def
 
 def get_options():

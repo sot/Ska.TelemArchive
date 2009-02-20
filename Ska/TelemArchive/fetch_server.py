@@ -274,7 +274,7 @@ def get_options():
                       type=float,
                       help="Maximum age for fetch output files before deletion (days)",)
     parser.add_option("--port",
-                      default=18039,
+                      default=18001,
                       type=int,
                       help="Socket port")
 
