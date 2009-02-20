@@ -268,8 +268,6 @@ def get_column_defs(table_defs, args):
             skip_cols = ['time', 'quality']
             skip_cols += [x['name'] for x in table_columns if not x.get('is_output', True)]
             table_col_names = [x['name'] for x in table_columns if x['name'] not in skip_cols]
-            print skip_cols
-            print table_col_names
 
             if not col_names:
                 col_names = table_col_names
