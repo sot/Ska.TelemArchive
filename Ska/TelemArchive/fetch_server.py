@@ -31,6 +31,8 @@ class FetchJobs(object):
         # Find existing jobs and clean expired directories
         jobids = self.clean_jobs()
 
+        logging.info('Initial jobids = %s' % str(jobids))
+
         # Read existing job information from jobfile.  
         for jobid in jobids:
             outdir = os.path.join(opt.outroot, jobid)
@@ -39,6 +41,7 @@ class FetchJobs(object):
             except IOError:
                 logging.info('Jobfile for %s failed to load during init %.1f' % outdir)
                 continue
+            logging.info('Adding job %s' % jobid)
             self.add(job)
 
     def clean_jobs(self):
@@ -74,7 +77,7 @@ class FetchJobs(object):
         job = dict(jobid=jobid,
                    systime_start=time.time(),
                    outdir=outdir,
-                   status='created',
+                   status='starting',
                    url=os.path.join(opt.urlroot, jobid, opt.outfile),
                    jobfile=os.path.join(opt.outroot, jobid, opt.jobfile),
                    statusfile=os.path.join(outdir, opt.statusfile),
@@ -84,6 +87,7 @@ class FetchJobs(object):
 
         os.makedirs(outdir)
         cPickle.dump(job, open(job['jobfile'], 'w'))
+        cPickle.dump(job, open(job['statusfile'], 'w'))
 
         return job
 
@@ -109,7 +113,7 @@ class FetchJobs(object):
             
 def run_fetch(job, kwargs):
     # Only pay attention to these keys in kwargs.  Others are ignored.
-    allowed_keys = ('start', 'stop', 'dt', 'out_format',
+    allowed_keys = ('obsid', 'start', 'stop', 'dt', 'out_format',
                     'time_format', 'colspecs')
     
     fetch_kwargs = dict(outfile=job['outfile'],
@@ -164,7 +168,7 @@ def server_action(action, jobs):
     elif cmd == 'run_fetch':
         if jobs.n_active >= opt.max_jobs:
             logging.warning('Maximum active jobs (%d) exceeded' % opt.max_jobs)
-            return dict(error='Maximum active jobs (%d) exceeded' % opt.max_jobs)
+            return [dict(error='Maximum active jobs (%d) exceeded' % opt.max_jobs)]
 
         job = jobs.create_job()
         run_fetch(job, kwargs)
@@ -184,10 +188,10 @@ def sigint_handler(signal, frame):
     raise Exception
 
 def server():
-    jobs = FetchJobs()
-
     logging.basicConfig(filename=opt.logfile, level=logging.INFO,
                         format='%(asctime)s %(levelname)s: %(message)s')
+
+    jobs = FetchJobs()
 
     # establish server
     try:
@@ -203,7 +207,7 @@ def server():
     while True:
         # serve forever
         channel, info = service.accept()
-        logging.info("Connection from %s" % str(info))
+        logging.info("Connection from %s on port %d" % (str(info), opt.port))
 
         prev_alarm_handler = signal.signal(signal.SIGALRM, timeout_handler)
         try:

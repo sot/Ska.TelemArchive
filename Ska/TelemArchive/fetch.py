@@ -38,7 +38,6 @@ def fetch(obsid=None,
           dt=32.8,
           out_format=None,
           time_format='secs',
-          sleep=None,
           colspecs=['ephin2eng:']):
     """
     Fetch data from the telemetry archive.
@@ -55,7 +54,6 @@ def fetch(obsid=None,
     :param dt: Sampling interval (sec)
     :param out_format: Format for output ('csv', 'space', 'dmascii', 'tab') (default=None => list)
     :param time_format: Format for output time stamp
-    :param sleep: Time to sleep per row for debug (secs) (default=None)
     :param colspecs: List of column specifiers
 
     :rtype: headers, values = tuple, list of tuples
@@ -87,8 +85,6 @@ def fetch(obsid=None,
 
     for i_date, date in enumerate(dates()):
         quality = 0
-        if sleep:
-            time.sleep(sleep)
         for column in columns:
             if column.table_type == 'pseudo_column':
                 if column.name == 'date':
@@ -101,7 +97,9 @@ def fetch(obsid=None,
             else:
                 try:
                     column.value, column.quality = column.get_value(date)
-                except RuntimeError:
+                except (RuntimeError, IOError):
+                    # RuntimeError means a data gap within files was found.
+                    # IOError implies missing file (most likely beyond end of data in archive)
                     if mind_the_gaps:  # Be stringent and raise the exception
                         raise
                     else:
@@ -235,8 +233,14 @@ def get_date_stamps(start, stop, timedel, obsid):
     if not start or not stop:
         raise RuntimeError, 'Start and/or stop time not provided'
         
-    datestart = Chandra.Time.DateTime(start).secs
-    datestop  = Chandra.Time.DateTime(stop).secs
+    try:
+        datestart = Chandra.Time.DateTime(start).secs
+    except:
+        raise ValueError('Invalid format for start time %s' % str(start))
+    try:
+        datestop = Chandra.Time.DateTime(stop).secs
+    except:
+        raise ValueError('Invalid format for stop time %s' % str(stop))
     
     def gen_date_stamps():
         date = datestart
