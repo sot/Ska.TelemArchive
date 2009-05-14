@@ -2,6 +2,8 @@ import os
 import sys
 import re
 import pprint
+import logging
+
 import pyfits
 from mx.DateTime import strptime, DateTime, Error, DateTimeDeltaFromSeconds
 import Chandra.Time
@@ -9,7 +11,15 @@ import Chandra.Time
 SKA = os.getenv('SKA') or '/proj/sot/ska'
 SKA_DATA = SKA + '/data/telem_archive'
 
+class NullHandler(logging.Handler):
+    def emit(self, record):
+        pass
+
+logger = logging.getLogger('data_table')
+logger.addHandler(NullHandler())
+
 data_tables = {}                        # Currently active data tables
+files_not_found = set()
 
 def add_days(year, doy, delta_days):
     d0 = Chandra.Time.DateTime('%04d:%03d' % (year,doy)).mxDateTime
@@ -35,7 +45,17 @@ class DataTable(object):
         self.doy = doy
         self.year = year
         self.table_type = table_type
-        hdulist = pyfits.open(self.file_name)
+
+        # Don't try to read if it already failed
+        if self.file_name in files_not_found:
+            raise IOError
+        logger.debug('Reading file %s' % self.file_name)
+        try:
+            hdulist = pyfits.open(self.file_name)
+        except IOError:
+            logger.debug('Could not open %s, raising IOError' % self.file_name)
+            files_not_found.add(self.file_name)
+            raise
         bintbl = hdulist[1]   # First extension of HDU list
         self.col_names = bintbl.columns.names
         self.i_row = 0
@@ -46,8 +66,7 @@ class DataTable(object):
         self.fits_data_arr = {}
         for col_name in self.col_names:
             col = bintbl.data.field(col_name)
-            ## WTF, shouldn't this just be list(col) ??
-            self.fits_data_arr[col_name] = [col[i] for i in xrange(self.n_rows)]
+            self.fits_data_arr[col_name] = list(col)
 
         # Start and stop date for file (as Chandra seconds)
         self.file_tstart = self.fits_data_arr['tstart'][0]
@@ -111,12 +130,11 @@ class DataColumn(object):
     def drop_table(self):
         if not self.data_table:
             return
-        #print >>sys.stderr, 'Dropping ref #%d to table %s' % (
-        #    self.data_table.references,
-        #    self.data_table.file_name)
+        logger.debug('Dropping ref #%d to table %s' % 
+                      (self.data_table.references, self.data_table.file_name))
         self.data_table.references -= 1
         if self.data_table.references <= 0:
-            # print >>sys.stderr, 'Dropping table %s' % self.data_table.file_name
+            logger.debug('Dropping table %s' % self.data_table.file_name)
             del data_tables[self.data_table.file_name]
         self.data_table = None
 
@@ -130,14 +148,13 @@ class DataColumn(object):
             if (year, doy, self.table_type) == (x.year, x.doy, x.table_type):
                 self.data_table = x
                 self.data_table.references += 1
-                #print >>sys.stderr, 'Adding ref #%d to table file %s' % (
-                # self.data_table.references,
-                #  self.data_table.file_name)
+                logger.debug('Adding ref #%d to table file %s' %
+                              (self.data_table.references, self.data_table.file_name))
                 break
         else:  # Doesn't exist, so create it and add to data_tables registry
             self.data_table = DataTable(year, doy, self.table_type)
             data_tables[self.data_table.file_name] = self.data_table
-            # print >>sys.stderr, 'Registering new table file %s' % self.data_table.file_name
+            logger.debug('Registering new table file %s' % self.data_table.file_name)
 
     def get_value(self, date):
         """Return value for the column for a particular date.  Register a new data_table
@@ -147,23 +164,35 @@ class DataColumn(object):
         year = None
         doy  = None
         
+        # This is expensive in an inner loop
+        # logger.debug('Trying to get %s at %s' % (self.name, date))
+
         # If we already have a data table for this column, see if we can
         # get a value.  Respond to exceptions if data value could not be returned.
         if self.data_table:
             sdt = self.data_table
             try:
                 return sdt.get_value(self.name, date)
-            except BeforeTableStart:
-                # re-raise because the data value must not be in table.
-                raise
             except AfterTableStop:
+                logger.debug('Got AfterTableStop')
                 (year, doy) = add_days(sdt.year, sdt.doy, +1)
+            # In theory the code below would be good, but it opens the possibility of
+            # oscillating if there is a data gap at the day boundary.  Need a recursion
+            # count but this could be tricky with all the exceptions being thrown.
+            # Instead just let the exception get raised and fetch() treats it as a bad
+            # quality column.
+            # 
+            # except BeforeTableStart:
+            #     logger.debug('Got BeforeTableStart')
+            #     (year, doy) = add_days(sdt.year, sdt.doy, -1)
         else:
-            mxdate = Chandra.Time.DateTime(date).mxDateTime - 1
+            mxdate = Chandra.Time.DateTime(date).mxDateTime
             (year, doy) = (mxdate.year, mxdate.day_of_year)
+            logger.debug('Setting year, doy to %d %d' % (year, doy))
 
         # If year and doy became defined, then we must need to attach to a different DataTable
-        if year!=None and doy!=None:
+        if year != None and doy != None:
+            logger.debug('Need table for column %s at %d %d' % (self.name, year, doy))
             self.drop_table()
             self.register_table(year, doy)
             return self.get_value(date)

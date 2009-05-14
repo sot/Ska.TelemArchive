@@ -1,0 +1,72 @@
+python -m cProfile -o fetchprof Ska/TelemArchive/fetch.py --time-format secs --start 2008:081:00:00:00 --stop 2008:123 --outfile junk.dat tephin 5ephint pcad_mode acis2eng_temp: 
+- Performance improves when fetching repeated from same files, presumably disk/gzip caching.
+
+In [43]: p3.sort_stats('cumulative').print_stats(60)
+Thu May 14 16:34:22 2009    fetchprof3
+
+         12876438 function calls (12866639 primitive calls) in 137.074 CPU seconds
+
+   Ordered by: cumulative time
+   List reduced from 1370 to 60 due to restriction <60>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000  137.126  137.126 <string>:1(<module>)
+        1    0.006    0.006  137.126  137.126 {execfile}
+        1    0.062    0.062  137.120  137.120 Ska/TelemArchive/fetch.py:4(<module>)
+        1    0.000    0.000  135.655  135.655 Ska/TelemArchive/fetch.py:34(main)
+        1   12.756   12.756  135.612  135.612 Ska/TelemArchive/fetch.py:50(fetch)
+1791920/1791232   10.784    0.000   79.920    0.000 /proj/sot/ska/hg/Ska.TelemArchive/Ska/TelemArchive/data_table.py:162(get_value)
+      688    0.045    0.000   42.151    0.061 /proj/sot/ska/hg/Ska.TelemArchive/Ska/TelemArchive/data_table.py:144(register_table)
+      172    1.264    0.007   42.096    0.245 /proj/sot/ska/hg/Ska.TelemArchive/Ska/TelemArchive/data_table.py:43(__init__)
+   111807    6.849    0.000   37.627    0.000 Ska/TelemArchive/fetch.py:216(write_output)
+      172    0.010    0.000   32.030    0.186 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/pyfits/NP_pyfits.py:4950(open)
+      172    0.016    0.000   31.689    0.184 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/pyfits/NP_pyfits.py:4218(__init__)
+  1791904   26.527    0.000   26.527    0.000 /proj/sot/ska/hg/Ska.TelemArchive/Ska/TelemArchive/data_table.py:91(get_value)
+      316   20.099    0.064   20.099    0.064 {posix.stat}
+      242    0.002    0.000   20.099    0.083 /usr/lib64/python2.5/posixpath.py:168(exists)
+   112788    5.632    0.000   16.998    0.000 {method 'join' of 'str' objects}
+  2012526    9.261    0.000   13.521    0.000 Ska/TelemArchive/fetch.py:217(<genexpr>)
+  2012526   11.366    0.000   11.366    0.000 Ska/TelemArchive/fetch.py:229(<genexpr>)
+      172    0.008    0.000   11.283    0.066 /usr/lib64/python2.5/gzip.py:208(read)
+      849    0.019    0.000   11.273    0.013 /usr/lib64/python2.5/gzip.py:245(_read)
+     1720   11.097    0.006   11.097    0.006 {method 'seek' of 'file' objects}
+        1    0.084    0.084    4.349    4.349 Ska/TelemArchive/fetch.py:338(get_table_defs)
+  1942516    4.329    0.000    4.339    0.000 {getattr}
+   290789    2.826    0.000    4.318    0.000 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib64/python2.5/site-packages/numpy/core/defchararray.py:59(__getitem__)
+       27    0.001    0.000    3.515    0.130 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/__init__.py:59(load)
+       27    0.006    0.000    3.490    0.129 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/constructor.py:35(get_data)
+       27    0.000    0.000    3.202    0.119 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/composer.py:24(get_node)
+       27    0.000    0.000    3.202    0.119 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/composer.py:29(compose_document)
+  3037/27    0.085    0.000    3.200    0.119 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/composer.py:42(compose_node)
+   427/27    0.049    0.000    3.192    0.118 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/composer.py:96(compose_mapping_node)
+     9296    0.117    0.000    2.909    0.000 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/parser.py:91(check_event)
+    56/55    0.004    0.000    2.719    0.049 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/composer.py:78(compose_sequence_node)
+  516/344    0.011    0.000    2.496    0.007 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/pyfits/NP_pyfits.py:3809(__getattr__)
+    23691    0.203    0.000    2.192    0.000 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/scanner.py:113(check_token)
+      172    0.129    0.001    1.781    0.010 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/pyfits/NP_pyfits.py:2835(__init__)
+      344    0.006    0.000    1.471    0.004 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/pyfits/NP_pyfits.py:4522(__getitem__)
+      344    0.160    0.000    1.462    0.004 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/pyfits/NP_pyfits.py:1659(setupHDU)
+     4274    0.088    0.000    1.449    0.000 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/scanner.py:153(fetch_more_tokens)
+     1316    0.016    0.000    1.191    0.001 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/parser.py:443(parse_block_mapping_value)
+     1743    0.022    0.000    0.985    0.001 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/parser.py:424(parse_block_mapping_key)
+     2552    0.051    0.000    0.977    0.000 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/scanner.py:668(fetch_plain)
+    18404    0.095    0.000    0.963    0.000 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/pyfits/NP_pyfits.py:335(__getattr__)
+     2322    0.176    0.000    0.934    0.000 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/pyfits/NP_pyfits.py:2681(__init__)
+     2552    0.246    0.000    0.856    0.000 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/scanner.py:1275(scan_plain)
+      248    0.834    0.003    0.834    0.003 {open}
+    32938    0.731    0.000    0.807    0.000 {eval}
+   416565    0.784    0.000    0.784    0.000 {isinstance}
+     3036    0.104    0.000    0.755    0.000 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/parser.py:270(parse_node)
+        1    0.034    0.034    0.735    0.735 /proj/sot/ska/hg/Ska.TelemArchive/Ska/TelemArchive/data_table.py:1(<module>)
+        1    0.003    0.003    0.663    0.663 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/pyfits/__init__.py:16(<module>)
+     2631    0.041    0.000    0.656    0.000 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/parser.py:267(parse_block_node_or_indentless_sequence)
+     2322    0.061    0.000    0.636    0.000 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/pyfits/NP_pyfits.py:3371(field)
+        1    0.099    0.099    0.630    0.630 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/pyfits/NP_pyfits.py:30(<module>)
+363568/361420    0.616    0.000    0.623    0.000 {len}
+     16/3    0.041    0.003    0.601    0.200 {__import__}
+    38094    0.276    0.000    0.600    0.000 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/scanner.py:142(need_more_tokens)
+      172    0.024    0.000    0.592    0.003 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/pyfits/NP_pyfits.py:3061(_get_tbdata)
+     4644    0.100    0.000    0.557    0.000 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/pyfits/rec.py:253(field)
+     8256    0.134    0.000    0.551    0.000 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/pyfits/NP_pyfits.py:543(_extractValueComment)
+        1    0.000    0.000    0.534    0.534 /proj/sot/ska/hg/Ska.TelemArchive/Ska/__init__.py:1(<module>)
+      434    0.063    0.000    0.534    0.001 /proj/sot/ska/arch/x86_64-linux_RHFC-8/lib/python2.5/site-packages/yaml/parser.py:378(parse_block_sequence_entry)

@@ -7,10 +7,11 @@ import os
 import sys
 import re
 import time
-import pyfits
+import logging
+
+from Ska.TelemArchive.data_table import DataColumn, DateNotInTable
 import Chandra.Time
 from mx.DateTime import strptime, DateTime, Error, DateTimeDeltaFromSeconds
-from Ska.TelemArchive.data_table import DataColumn, DateNotInTable
 import cPickle
 from pyparsing import (Word, alphanums, delimitedList, ParseException,
                        Optional, lineStart, lineEnd)
@@ -24,6 +25,14 @@ def main():
     # One difference in function vs. program interface:
     kwargs['out_format'] = kwargs.get('file_format')
     del kwargs['file_format']
+    
+    if opt.debug:
+        logger = logging.getLogger('data_table')
+        logger.setLevel(logging.DEBUG)
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(logging.Formatter('%(message)s'))
+        logger.addHandler(handler)
+    
     fetch(colspecs=args, **kwargs)
 
 def fetch(obsid=None,
@@ -33,6 +42,7 @@ def fetch(obsid=None,
           max_size=None,
           ignore_quality=False,
           mind_the_gaps=False,
+          debug=False,
           start=None,
           stop=None,
           dt=32.8,
@@ -71,7 +81,6 @@ def fetch(obsid=None,
         column_defs.append({'table':'pseudo_column', 'name':'quality'})
 
     columns = [ DataColumn(x) for x in column_defs]
-
     output_headers = write_output(columns, out_format, 'name')
     output_values = []
     
@@ -317,13 +326,16 @@ def get_table_defs(table_dir):
     """ Read all the table definition files in specified table_dir """
     from glob import glob
     import yaml
+    print >>sys.stderr, "Starting get_table_defs"
     table_files = glob(table_dir + '/*.yml')
     assert table_files, 'No table files found'
 
     table_def = {}
     for filename in table_files:
         table_name = re.sub(r'\.yml$', '', os.path.basename(filename))
+        print >>sys.stderr, "Reading ", filename
         table_def[table_name] = yaml.load(open(filename).read())
+    print >>sys.stderr, "Finishing get_table_defs"
     return table_def
 
 def get_options():
@@ -379,6 +391,11 @@ def get_options():
                       default='date',
                       choices=['date','greta','secs','jd','mjd','fits','unix'],
                       help="Output time format (date greta secs jd mjd fits unix)",
+                      )
+    parser.add_option("--debug",
+                      action="store_true",
+                      default=False,
+                      help="Enable debug output",
                       )
     (opt, args) = parser.parse_args()
     if not args: args = ['ephin2eng:']
