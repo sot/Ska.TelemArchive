@@ -31,7 +31,7 @@ class FetchJobs(object):
         # Find existing jobs and clean expired directories
         jobids = self.clean_jobs()
 
-        logging.info('Initial jobids = %s' % str(jobids))
+        logging.debug('Initial jobids = %s' % str(jobids))
 
         # Read existing job information from jobfile.  
         for jobid in jobids:
@@ -199,7 +199,7 @@ def server():
         service.bind(("", opt.port))
         service.listen(1)
     except socket.error:
-        logging.info("Socket already in use (probably normal)")
+        logging.debug("Socket already in use (probably normal)")
         sys.exit(0)
 
     logging.info("Listening on port %d" % opt.port)
