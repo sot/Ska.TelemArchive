@@ -326,16 +326,13 @@ def get_table_defs(table_dir):
     """ Read all the table definition files in specified table_dir """
     from glob import glob
     import yaml
-    print >>sys.stderr, "Starting get_table_defs"
     table_files = glob(table_dir + '/*.yml')
     assert table_files, 'No table files found'
 
     table_def = {}
     for filename in table_files:
         table_name = re.sub(r'\.yml$', '', os.path.basename(filename))
-        print >>sys.stderr, "Reading ", filename
         table_def[table_name] = yaml.load(open(filename).read())
-    print >>sys.stderr, "Finishing get_table_defs"
     return table_def
 
 def get_options():
