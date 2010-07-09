@@ -72,7 +72,9 @@ def fetch(obsid=None,
 
     # Redirect stdout and stderr if specified
     if outfile:
-        sys.stdout = open(outfile, 'w')
+        sys_stdout = sys.stdout
+        f_outfile = open(outfile, 'w')
+        sys.stdout = f_outfile
 
     # Create data column objects for each requested column name (along with date and quality)
     column_defs = [{'table':'pseudo_column', 'name':'date'}]
@@ -133,6 +135,10 @@ def fetch(obsid=None,
     status.check_now(i_date)
     status.write_statusfile('done')
 
+    if outfile:
+        sys.stdout = sys_stdout
+        f_outfile.close()
+        
     return output_headers, output_values
 
 class FetchStatus(object):
