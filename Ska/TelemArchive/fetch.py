@@ -8,6 +8,8 @@ import sys
 import re
 import time
 import logging
+import sqlite3 as sqlite
+import numpy
 
 from Ska.TelemArchive.data_table import DataColumn, DateNotInTable
 import Chandra.Time
@@ -116,7 +118,11 @@ def fetch(obsid=None,
                     else:
                         column.quality = 1
                         column.value = None
-                quality |= column.quality
+                try:
+                    quality |= column.quality
+                except TypeError:
+                    if not numpy.isnan(column.quality):
+                        raise
 
         if (not quality or ignore_quality):
             vals = write_output(columns, out_format, 'value')
@@ -231,7 +237,6 @@ def get_date_stamps(start, stop, timedel, obsid):
     """
     # Use Chandra.Time.DateTime to convert most any input format to YYYY:DOY:HH:MM:SS
     if obsid:
-        from pysqlite2 import dbapi2 as sqlite
         conn = sqlite.connect(os.path.join(os.environ.get('SKA', '/proj/sot/ska'),
                                            'data/telem_archive/db.sql3'))
         cur = conn.cursor()
